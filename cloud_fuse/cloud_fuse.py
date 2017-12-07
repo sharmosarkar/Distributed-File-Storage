@@ -77,13 +77,13 @@ class DropBox(Operations):
 		logging.debug("\npath = %s\nstat = %s" % (
 			 str(get_mnt_path), str(st)))
 		return dict((key, getattr(st, key)) for key in ('st_atime',
-														'st_ctime',
-														'st_gid',
-														'st_mode',
-														'st_mtime',
-														'st_nlink',
-														'st_size',
-														'st_uid'))
+			'st_ctime',
+			'st_gid',
+			'st_mode',
+			'st_mtime',
+			'st_nlink',
+			'st_size',
+			'st_uid'))
 
 	def readdir(self, path, fh):
 		get_mnt_path = self._get_mnt_path(path)
