@@ -11,6 +11,7 @@ import logging
 # For finding module name #
 import inspect
 import json
+import ast
 
 # Import fusepy #
 from fuse import FUSE, FuseOSError, Operations
@@ -50,6 +51,11 @@ class DropBox(Operations):
     def access(self, path, mode):
         get_mnt_path = self._get_mnt_path(path)
         # Logging #
+
+        # Algorithm : #
+        # 1. get fstat of the file #
+        # 2.     Compare mode with fstat.st_mode #
+
         self.log_func_name()
         logging.info("\npath = %s,type=%s\nmode = %s,type=%s" % (
              str(get_mnt_path), type(get_mnt_path), str(mode), type(mode)))
@@ -59,6 +65,12 @@ class DropBox(Operations):
     def chmod(self, path, mode):
         get_mnt_path = self._get_mnt_path(path)
         # Logging #
+        
+        # Algorithm : #
+        # 1. get fstat of the file #
+        # 2. Compare mode with fstat.st_mode #
+        #     if yes updatefile/dir with the new mode in the cloud metadata table #
+
         self.log_func_name()
         logging.info("\npath = %s,type=%s\nmode = %s,type=%s" % (
             str(get_mnt_path), type(get_mnt_path), str(mode), type(mode)))
@@ -67,20 +79,55 @@ class DropBox(Operations):
     def chown(self, path, uid, gid):
         get_mnt_path = self._get_mnt_path(path)
         # Logging #
+
+        # Algorithm : #
+        # 1. get fstat of the file #
+        # 2. Compare uid,gid and if the user has permissions or not #
+        #     if yes updatefile/dir with the uid,gid in the cloud metadata table ##
         self.log_func_name()
         logging.info("\npath = %s,type=%s\nuid = %i,type=%s\ngid = %i,type=%s" % (
              str(get_mnt_path), type(get_mnt_path), uid, type(uid), gid, type(gid)))
         return os.chown(get_mnt_path, uid, gid)
 
     def getattr(self, path, fh=None):
+        # if fh == None:
+        #     print "fh None"
+        #     print path
+        # else:
+        #     print "fh not None"
+        #     print "path :" + path
+        #     print "fh : " + fh
+
         get_mnt_path = self._get_mnt_path(path)
         st = os.lstat(get_mnt_path)
+        print st
+        print type(st)
+        
+        splitted = get_mnt_path.split("/")
+        filename = splitted[-2]
+        pathname = ("/".join(splitted[:-2]))+"/"
+        print filename, pathname
+
+        # Calling AWS Java Server #
+        st1 = json.loads(self.app.getFstat(filename, pathname))
+        st2 = ast.literal_eval(json.dumps(st1))
+        print st2
+        print type(st2)
+        st3 = {}
+        for key, val in st2.iteritems():
+            if key in ['st_atime', 'st_ctime', 'st_gid','st_mode','st_mtime','st_nlink','st_size','st_uid'] :
+                st3[key] = st2[key]
+        print '*****************************************************************'
+        print st3
+        print type(st3)
+        print '*****************************************************************'
+
         # Logging #
         self.log_func_name()
         logging.info("\npath = %s,type=%s\nstat = %s,type=%s" % (
              str(get_mnt_path), type(get_mnt_path), str(st), type(st)))
-
-        return dict((key, getattr(st, key)) for key in ('st_atime',
+    
+        temp = dict((key, getattr(st, key)) for key in ('st_atime',
             'st_ctime',
             'st_gid',
             'st_mode',
@@ -89,11 +136,47 @@ class DropBox(Operations):
             'st_size',
             'st_uid'))
 
+        print "--------------------------------------------------"
+        print temp
+        print type(temp)
+        print "--------------------------------------------------"
+
+        # return temp
+        return st3
+
+
     def readdir(self, path, fh):
+
         get_mnt_path = self._get_mnt_path(path)
+
+        # Algorithm #
+        # 1. Call metadata readDir & GetDirents #
+        # 2. Append Dirents #
+
+        print "====================================="
+        print "====================================="
+        print get_mnt_path
+        print "====================================="
+        print "====================================="
+
+        if get_mnt_path[-1] != "/":
+            pathname = get_mnt_path + "/"
+        else:
+            pathname = get_mnt_path
+
+        print "====================================="
+        print "====================================="
+        print pathname
+        print "====================================="
+        print "====================================="
+
         dirents = ['.', '..']
+        dir_ent = self.app.readDir(pathname)
+
         if os.path.isdir(get_mnt_path):
-            dirents.extend(os.listdir(get_mnt_path))
+            #dirents.extend(os.listdir(get_mnt_path))
+            dirents.extend(dir_ent[2:])
+
         # Logging #
         self.log_func_name()
         logging.info("\npath = %s,type=%s\ndirents = %s,type=%s" % (
@@ -202,21 +285,18 @@ class DropBox(Operations):
         self.log_func_name()
         logging.info("\npath = %s,type=%s\nflags = %s,type=%s" % (
              str(get_mnt_path), type(get_mnt_path), str(flags), type(flags)))
-
-        # Calling AWS Java Server #
-        mydict = json.dumps(dict(self.app.getStat("Hello")))
-        logging.info("\nGETSTAT : %s\nTYPE : %s" % (mydict, type(mydict)))
-        #print mydict, type(mydict)
-
         return os.open(get_mnt_path, flags)
 
     def create(self, path, mode, fi=None):
         get_mnt_path = self._get_mnt_path(path)
+
         # Logging #
         self.log_func_name()
         logging.info("\npath = %s,type=%s\nmode = %s,type=%s" % (
              str(get_mnt_path), type(get_mnt_path), str(mode), type(mode)))
-        return os.open(get_mnt_path, os.O_WRONLY | os.O_CREAT, mode)
+
+        ret = os.open(get_mnt_path, os.O_WRONLY | os.O_CREAT, mode)
+        return ret;
 
     def read(self, path, length, offset, fh):
         os.lseek(fh, offset, os.SEEK_SET)
