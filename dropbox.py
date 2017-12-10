@@ -44,7 +44,8 @@ def download_file():
     out.close()
     print 'Download Complete'
 
-access_token = 'Fu8JUVLZcVAAAAAAAAACc6eiK3w9618gKRlXOfsvfVT-bWQ_L1HNcn9mfMsktv1B'
+access_token = 'zffyKug4NGAAAAAAAAAAbTa8GAkmZYCX6aUmADgQpawCRQEq_7t8LOmdRxxz6lDU'
+#'Fu8JUVLZcVAAAAAAAAACc6eiK3w9618gKRlXOfsvfVT-bWQ_L1HNcn9mfMsktv1B'
 dbx = dropbox.Dropbox(access_token)
 user_account = dbx.users_get_current_account()
 print 'User Account \n', user_account

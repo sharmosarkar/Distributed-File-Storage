@@ -15,7 +15,7 @@ public class CreateDirectory
 	{
 		// validate received args
 		List<FstatResponse> resp = new ArrayList<FstatResponse>();
-		
+
 		if (validateArgsForCreateDirectory(fileArgs))
 		{
 			// handle error
@@ -26,7 +26,7 @@ public class CreateDirectory
 
 		// check if received inp is for a dir and not a file
 
-		if (!fileArgs.getProtection().contains("d"))
+		if (fileArgs.isDirectory() == false)
 		{
 			// handle error
 			System.out.println("For createdir op input should be a directory and not a file.");
@@ -45,7 +45,7 @@ public class CreateDirectory
 		}
 
 		// insert into fstat
-		
+
 		if (FileOperationsDAO.updateFileTablesForCreateDirectory(fileArgs))
 		{
 			//return new ResponseData(1, "Failed to update fstat for directory: " + fileArgs.getFileName());
@@ -53,10 +53,10 @@ public class CreateDirectory
 		}
 
 		//return new ResponseData(0, "Directory created successfully: " + fileArgs.getFileName());
-		
+
 		resp = FileOperationsDAO.getFstatResponse(-1, fileArgs.getFileName(),
 				fileArgs.getFilePath());
-		
+
 		return resp;
 	}
 
@@ -76,7 +76,7 @@ public class CreateDirectory
 			errorFlag = true;
 			message = "File path is empty";
 		}
-		else if (StringUtils.isNullOrEmpty(args.getProtection()))
+		else if (args.getProtection() == 0)
 		{
 			errorFlag = true;
 			message = "File protection is empty";
@@ -85,6 +85,11 @@ public class CreateDirectory
 		{
 			errorFlag = true;
 			message = "File owner is empty";
+		}
+		else if (StringUtils.isNullOrEmpty(args.getGroup()))
+		{
+			errorFlag = true;
+			message = "File group is empty";
 		}
 
 		if (!errorFlag)

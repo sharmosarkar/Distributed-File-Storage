@@ -16,7 +16,7 @@ public class UpdateDirectory
 		// TODO Auto-generated method stub
 
 		List<FstatResponse> resp = new ArrayList<FstatResponse>();
-		
+
 		// validate args
 
 		if (validateArgsForUpdateDirectory(args))
@@ -29,7 +29,7 @@ public class UpdateDirectory
 
 		// check if received inp is for a dir and not a file
 
-		if (!args.getProtection().contains("d"))
+		if (args.isDirectory() == false)
 		{
 			// handle error
 			System.out.println("For updatedir op input should be a directory and not a file.");
@@ -56,10 +56,10 @@ public class UpdateDirectory
 		}
 
 		//return new ResponseData(0, "Directory updated successfully: " + args.getFileName());
-		
+
 		resp = FileOperationsDAO.getFstatResponse(args.getInode(), args.getFileName(),
 				args.getFilePath());
-		
+
 		return resp;
 
 	}
@@ -85,7 +85,7 @@ public class UpdateDirectory
 			errorFlag = true;
 			message = "File size is empty";
 		}
-		else if (StringUtils.isNullOrEmpty(args.getProtection()))
+		else if (args.getProtection() == 0)
 		{
 			errorFlag = true;
 			message = "File protection is empty";
@@ -99,8 +99,13 @@ public class UpdateDirectory
 		{
 			errorFlag = true;
 			message = "File owner is empty";
-		}		
-		
+		}
+		else if (StringUtils.isNullOrEmpty(args.getGroup()))
+		{
+			errorFlag = true;
+			message = "File group is empty";
+		}
+
 		if (!errorFlag)
 			System.out.println(message); // for debugging only
 

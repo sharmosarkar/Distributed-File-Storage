@@ -20,9 +20,10 @@ import com.models.ResponseData;
 public class IcfsMain
 {
 	private static Logger log = LogManager.getLogger(IcfsMain.class);
-	
+
 	public static void main(String[] args)
-	{				
+	{
+
 		ResponseData resp = null;
 		List<FstatResponse> response = null;
 		String requestType = "";
@@ -31,54 +32,58 @@ public class IcfsMain
 
 		switch (requestType)
 		{
-		case "create":
-			// file and directory
-			response = new CreateFile().createFile(fileArgs);
-			System.out.println(new Gson().toJson(response));
-			//System.out.println("Create resp: " + resp.getResponseCode() + " - " + resp.getResponseMessage());
-			break;
+			case "create":
+				// file and directory
+				response = new CreateFile().createFile(fileArgs);
+				//System.out.println(new Gson().toJson(response));
+				System.out.println(response.isEmpty() ? "" : (new Gson().toJson(response.get(0))));
+				//System.out.println("Create resp: " + resp.getResponseCode() + " - " + resp.getResponseMessage());
+				break;
 
-		case "read":
-			break;
+			case "read":
+				break;
 
-		case "update":
-			//resp = new UpdateFile().updateFile(fileArgs);
-			response = new CreateFile().createFile(fileArgs);
-			//System.out.println("Update resp: " + resp.getResponseCode() + " - " + resp.getResponseMessage());
-			System.out.println(new Gson().toJson(response));
-			break;
+			case "update":
+				//resp = new UpdateFile().updateFile(fileArgs);
+				response = new CreateFile().createFile(fileArgs);
+				//System.out.println("Update resp: " + resp.getResponseCode() + " - " + resp.getResponseMessage());
+				//System.out.println(new Gson().toJson(response));
+				System.out.println(response.isEmpty() ? "" : (new Gson().toJson(response.get(0))));
+				break;
 
-		case "delete":
-			resp = new DeleteFile().deleteFile(fileArgs, null, false);
-			System.out.println("Delete resp: " + resp.getResponseCode() + " - " + resp.getResponseMessage());
-			break;
+			case "delete":
+				resp = new DeleteFile().deleteFile(fileArgs, null, false);
+				System.out.println("Delete resp: " + resp.getResponseCode() + " - " + resp.getResponseMessage());
+				break;
 
-		case "createdir":
-			response = new CreateDirectory().createDirectory(fileArgs);
-			//System.out.println("Create Dir resp: " + resp.getResponseCode() + " - " + resp.getResponseMessage());
-			System.out.println(new Gson().toJson(response));
-			break;
-			
-		case "readdir":
-			response = new ReadDirectory().readDirectory(fileArgs);
-			//System.out.println("Create Dir resp: " + resp.getResponseCode() + " - " + resp.getResponseMessage());
-			System.out.println(new Gson().toJson(response));
-			break;
-			
-		case "updatedir": // chmod and chown
-			response = new UpdateDirectory().updateDirectory(fileArgs);
-			//System.out.println("Update dir resp: " + resp.getResponseCode() + " - " + resp.getResponseMessage());
-			System.out.println(new Gson().toJson(response));
-			break;
-			
-		case "deletedir":
-			resp = new DeleteDirectory().deleteDirectory(fileArgs);
-			//System.out.println("Delete directory resp: " + resp.getResponseCode() + " - " + resp.getResponseMessage());
-			break;	
-			
-		default:
-			System.out.println("Incorrect operation type received");
-			break;
+			case "createdir":
+				response = new CreateDirectory().createDirectory(fileArgs);
+				//System.out.println("Create Dir resp: " + resp.getResponseCode() + " - " + resp.getResponseMessage());
+				//System.out.println(new Gson().toJson(response));
+				System.out.println(response.isEmpty() ? "" : (new Gson().toJson(response.get(0))));
+				break;
+
+			case "readdir":
+				response = new ReadDirectory().readDirectory(fileArgs);
+				//System.out.println("Create Dir resp: " + resp.getResponseCode() + " - " + resp.getResponseMessage());
+				System.out.println(new Gson().toJson(response));
+				break;
+
+			case "updatedir": // chmod and chown
+				response = new UpdateDirectory().updateDirectory(fileArgs);
+				//System.out.println("Update dir resp: " + resp.getResponseCode() + " - " + resp.getResponseMessage());
+				//System.out.println(new Gson().toJson(response));
+				System.out.println(response.isEmpty() ? "" : (new Gson().toJson(response.get(0))));
+				break;
+
+			case "deletedir":
+				resp = new DeleteDirectory().deleteDirectory(fileArgs);
+				//System.out.println("Delete directory resp: " + resp.getResponseCode() + " - " + resp.getResponseMessage());
+				break;
+
+			default:
+				System.out.println("Incorrect operation type received");
+				break;
 		}
 
 	}
@@ -116,7 +121,7 @@ public class IcfsMain
 
 	private static FileArgs loadArgs(CommandLine cmd)
 	{
-		// TODO Auto-generated method stub		
+		// TODO Auto-generated method stub
 		FileArgs args = new FileArgs();
 
 		if (null != cmd.getOptionValue("op"))
@@ -128,9 +133,11 @@ public class IcfsMain
 		if (null != cmd.getOptionValue("localfilepath"))
 			args.setLocalFilePath(cmd.getOptionValue("localfilepath"));
 		if (null != cmd.getOptionValue("protection"))
-			args.setProtection(cmd.getOptionValue("protection"));
+			args.setProtection(new Integer(cmd.getOptionValue("protection")).intValue());
 		if (null != cmd.getOptionValue("owner"))
 			args.setOwner(cmd.getOptionValue("owner"));
+		if (null != cmd.getOptionValue("group"))
+			args.setGroup(cmd.getOptionValue("group"));
 		if (null != cmd.getOptionValue("currentuser"))
 			args.setCurrentUser(cmd.getOptionValue("currentuser"));
 		if (null != cmd.getOptionValue("inode"))
@@ -141,6 +148,8 @@ public class IcfsMain
 			args.setFileSize(new Integer(cmd.getOptionValue("filesize")).intValue());
 		else
 			args.setFileSize(-1);
+		if (null != cmd.getOptionValue("isDirectory"))
+			args.setDirectory(new Boolean(cmd.getOptionValue("isDirectory")).booleanValue());
 
 		return args;
 	}
@@ -181,9 +190,18 @@ public class IcfsMain
 		owner.setRequired(false);
 		options.addOption(owner);
 
+		Option group = new Option("group", true, "group");
+		group.setRequired(false);
+		options.addOption(group);
+
 		Option currentuser = new Option("currentuser", true, "currentuser");
 		currentuser.setRequired(false);
 		options.addOption(currentuser);
+
+		Option isDirectory = new Option("isDirectory", true, "isDirectory");
+		isDirectory.setRequired(false);
+		options.addOption(isDirectory);
+
 
 		return options;
 	}

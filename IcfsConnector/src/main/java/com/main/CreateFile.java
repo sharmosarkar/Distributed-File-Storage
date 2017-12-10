@@ -17,7 +17,7 @@ public class CreateFile
 	{
 		FileOperationUtils fou = new FileOperationUtils();
 		List<FstatResponse> resp = new ArrayList<FstatResponse>();
-		
+
 		// validate received args
 
 		if (validateArgsForCreateFile(args))
@@ -30,7 +30,7 @@ public class CreateFile
 
 		// check if received inp is for a file and not dir
 
-		if (args.getProtection().contains("d"))
+		if (args.isDirectory() == true)
 		{
 			// handle error
 			System.out.println("For create op input should be a file and not a directory");
@@ -90,7 +90,7 @@ public class CreateFile
 
 		// update cloud meta
 		//FileOperationsDAO.updateCloudMetadata(fileUploadData); // use db api instead of calc
-		
+
 		boolean metadataUpdateStatus = new FileOperationUtils().updateFreeSpace(devices);
 		System.out.println("Cloud meta updated? " + metadataUpdateStatus);
 
@@ -126,7 +126,7 @@ public class CreateFile
 			errorFlag = true;
 			message = "File size is empty";
 		}
-		else if (StringUtils.isNullOrEmpty(args.getProtection()))
+		else if (args.getProtection() == 0)
 		{
 			errorFlag = true;
 			message = "File protection is empty";
@@ -136,8 +136,13 @@ public class CreateFile
 			errorFlag = true;
 			message = "File owner is empty";
 		}
+		else if (StringUtils.isNullOrEmpty(args.getGroup()))
+		{
+			errorFlag = true;
+			message = "File group is empty";
+		}
 
-		if (!errorFlag)
+		if (errorFlag)
 			System.out.println(message); // for debugging only
 
 		return errorFlag;

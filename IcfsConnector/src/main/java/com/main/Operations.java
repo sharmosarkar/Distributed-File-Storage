@@ -25,4 +25,8 @@ public class Operations {
     public FstatResponse getFstat(FileArgs args) {
         return obj.getFstat(args);
     }
+
+    public int getInode(String fileName, String filePath, String owner, String group ){
+        return obj.getInode( fileName,  filePath,  owner,  group );
+    }
 }

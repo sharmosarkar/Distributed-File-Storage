@@ -15,8 +15,9 @@ public class FstatResponse
 	private long st_atime;
 	private long st_mtime;
 	private long st_ctime;
-	private long st_isdir;
-	
+	private int st_isdir;
+
+
 	public int getSt_dev()
 	{
 		return st_dev;
@@ -125,6 +126,7 @@ public class FstatResponse
 	{
 		this.st_isdir = st_isdir;
 	}
+	public int getSt_isdir(){ return st_isdir;}
 	
 	
 }

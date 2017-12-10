@@ -23,7 +23,7 @@ public class UpdateFile
 		FileOperationUtils fou = new FileOperationUtils();
 
 		List<FstatResponse> resp = new ArrayList<FstatResponse>();
-		
+
 		// validate args
 
 		if (validateArgsForUpdateFile(args))
@@ -35,7 +35,7 @@ public class UpdateFile
 
 		// check if received inp is for a file and not dir
 
-		if (args.getProtection().contains("d"))
+		if (args.isDirectory() == true)
 		{
 			// handle error
 			System.out.println("For update op input should be a file and not a directory");
@@ -61,7 +61,7 @@ public class UpdateFile
 		currentFreeSpace = FileOperationUtils.getTotalFreeSpace(devices);
 
 		if ((currentFreeSpace + fileData.getFileSize()) < args.getFileSize()) // assuming whole file (all splits) will
-																				// be deleted
+		// be deleted
 		{
 			System.out.println("Not enough free space available to store updated file");
 			//System.exit(0);
@@ -124,13 +124,13 @@ public class UpdateFile
 
 		// update cloud meta
 		//FileOperationsDAO.updateCloudMetadata(fud); // use db api instead of calc
-		
+
 		boolean metadataUpdateStatus = new FileOperationUtils().updateFreeSpace(devices);
 		System.out.println("Cloud meta updated? " + metadataUpdateStatus);
 
 		resp = FileOperationsDAO.getFstatResponse(fileData.getInode(), fileData.getFileName(),
 				fileData.getFilePath());
-		
+
 		//return new ResponseData(0, "File updated successfully");
 		return resp;
 	}
@@ -161,7 +161,7 @@ public class UpdateFile
 			errorFlag = true;
 			message = "File size is empty";
 		}
-		else if (StringUtils.isNullOrEmpty(args.getProtection()))
+		else if (args.getProtection() == 0)
 		{
 			errorFlag = true;
 			message = "File protection is empty";
@@ -175,6 +175,11 @@ public class UpdateFile
 		{
 			errorFlag = true;
 			message = "File owner is empty";
+		}
+		else if (StringUtils.isNullOrEmpty(args.getGroup()))
+		{
+			errorFlag = true;
+			message = "File group is empty";
 		}
 
 		if (!errorFlag)

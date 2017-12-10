@@ -4,6 +4,9 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.text.DateFormat;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -19,16 +22,18 @@ import com.models.FstatResponse;
 import com.mysql.jdbc.Statement;
 import com.utils.CommonUtils;
 import com.utils.DBUtils;
+import java.time.Instant;
 
 public class FileOperationsDAO
 {
-    Connection connObj = null;
-    PreparedStatement pst = null;
-    ResultSet rs = null;
-    String query = null;
-    public FileOperationsDAO(){
-        connObj = DBUtils.getDbConnection();
-    }
+	Connection connObj = null;
+	PreparedStatement pst = null;
+	ResultSet rs = null;
+	String query = null;
+    static DateFormat dF = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.S");
+	public FileOperationsDAO(){
+		connObj = DBUtils.getDbConnection();
+	}
 
 	public static boolean fileAlreadyExists(String fileName, String filePath)
 	{
@@ -117,7 +122,7 @@ public class FileOperationsDAO
 
 		String insertFstatQuery = "insert into fstat (file_name, file_path, file_size, protection, owner_id, group_id, "
 				+ "hard_links,last_user_access,last_access_time, modified_time, creation_time, is_directory) "
-				+ "values (?, ?, ?, (select protection_id from permissions where protection_bits = ?), ?, ?, ?, ?, ?, ?, ?, ?)";
+				+ "values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
 		String insertDestCloudQuery = "insert into destination_cloud (device_id, inode, file_name, file_path, file_size, sequence) values (?, ?, ?, ?, ?, ?)";
 
@@ -131,15 +136,15 @@ public class FileOperationsDAO
 			pst.setString(1, args.getFileName());
 			pst.setString(2, args.getFilePath());
 			pst.setInt(3, args.getFileSize());
-			pst.setString(4, args.getProtection());
+			pst.setInt(4, args.getProtection());
 			pst.setInt(5, new Integer(args.getOwner()));
-			pst.setInt(6, 0);
+			pst.setInt(6, new Integer(args.getGroup()));
 			pst.setInt(7, 0);
 			pst.setInt(8, new Integer(args.getOwner()));
 			pst.setString(9, CommonUtils.getCurrentTime());
 			pst.setString(10, CommonUtils.getCurrentTime());
 			pst.setString(11, CommonUtils.getCurrentTime());
-			pst.setBoolean(12, args.getProtection().contains("d"));
+			pst.setBoolean(12, args.isDirectory());
 
 			System.out.println("Rows inserted/updated in fstat: " + pst.executeUpdate());
 
@@ -198,8 +203,8 @@ public class FileOperationsDAO
 		ResultSet rs = null;
 
 		String updateFstatQuery = "update fstat "
-				+ "set file_size = ?, protection = (select protection_id from permissions where protection_bits = ? ), "
-				+ "owner_id = ?, last_access_time = now(), modified_time = now() " + "where inode = ?;";
+				+ "set file_size = ?, protection = ?, "
+				+ "owner_id = ?, group_id = ?, last_access_time = now(), modified_time = now() " + "where inode = ?;";
 
 		String insertDestCloudQuery = "insert into destination_cloud (device_id, inode, file_name, file_path, file_size, sequence) values (?, ?, ?, ?, ?, ?)";
 
@@ -211,9 +216,10 @@ public class FileOperationsDAO
 			pst = con.prepareStatement(updateFstatQuery);
 
 			pst.setInt(1, args.getFileSize());
-			pst.setString(2, args.getProtection());
+			pst.setInt(2, args.getProtection());
 			pst.setInt(3, new Integer(args.getOwner()));
-			pst.setInt(4, fud.getInode());
+			pst.setInt(4, new Integer(args.getGroup()));
+			pst.setInt(5, fud.getInode());
 
 			System.out.println("Rows updated in fstat: " + pst.executeUpdate());
 
@@ -455,65 +461,65 @@ public class FileOperationsDAO
 		return errorFlag;
 	}
 
-	public static boolean updateFreeSpace(Map<Integer, Integer> updatedFreeSpace)
-	{
-		// TODO Auto-generated method stub
-		boolean errorFlag = false;
+    public static boolean updateFreeSpace(Map<Integer, Integer> updatedFreeSpace)
+    {
+        // TODO Auto-generated method stub
+        boolean errorFlag = false;
 
-		if (updatedFreeSpace.isEmpty())
-			return true; // nothing to update
+        if (updatedFreeSpace.isEmpty())
+            return false; // nothing to update
 
-		Connection con = null;
-		PreparedStatement pst = null;
-		ResultSet rs = null;
+        Connection con = null;
+        PreparedStatement pst = null;
+        ResultSet rs = null;
 
-		try
-		{
-			con = DBUtils.getDbConnection();
+        try
+        {
+            con = DBUtils.getDbConnection();
 
-			con.setAutoCommit(false);
+            con.setAutoCommit(false);
 
-			pst = con.prepareStatement("update cloud_metadata set free_space = ? where device_id = ?;");
+            pst = con.prepareStatement("update cloud_metadata set free_space = ? where device_id = ?;");
 
-			Iterator<Map.Entry<Integer, Integer>> itr = updatedFreeSpace.entrySet().iterator();
+            Iterator<Map.Entry<Integer, Integer>> itr = updatedFreeSpace.entrySet().iterator();
 
-			while (itr.hasNext())
-			{
-				Map.Entry<Integer, Integer> entry = itr.next();
-				
-				pst.setInt(1, entry.getValue());				
-				pst.setInt(2, entry.getKey());
-				System.out.println(pst);
-				pst.addBatch(); // executing in batch to avoid multiple db connections
-			}
+            while (itr.hasNext())
+            {
+                Map.Entry<Integer, Integer> entry = itr.next();
 
-			pst.executeBatch();
+                pst.setInt(1, entry.getValue());
+                pst.setInt(2, entry.getKey());
+                System.out.println(pst);
+                pst.addBatch(); // executing in batch to avoid multiple db connections
+            }
 
-			con.commit();
+            pst.executeBatch();
 
-		}
-		catch (Exception e)
-		{
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-			errorFlag = true;
+            con.commit();
 
-			try
-			{
-				con.rollback();
-			}
-			catch (SQLException e1)
-			{
-				// TODO Auto-generated catch block
-				e1.printStackTrace();
-			}
-		}
+        }
+        catch (Exception e)
+        {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+            errorFlag = true;
 
-		if (!DBUtils.closeDbConnection(con, pst, rs))
-			System.out.println("Error occured");
+            try
+            {
+                con.rollback();
+            }
+            catch (SQLException e1)
+            {
+                // TODO Auto-generated catch block
+                e1.printStackTrace();
+            }
+        }
 
-		return errorFlag;
-	}
+        if (!DBUtils.closeDbConnection(con, pst, rs))
+            System.out.println("Error occured");
+
+        return errorFlag;
+    }
 
 	public static boolean updateFileTablesForCreateDirectory(FileArgs args)
 	{
@@ -531,20 +537,20 @@ public class FileOperationsDAO
 			pst = con.prepareStatement(
 					"insert into fstat (file_name, file_path, file_size, protection, owner_id, group_id, "
 							+ "hard_links,last_user_access,last_access_time, modified_time, creation_time, is_directory) "
-							+ "values (?, ?, ?, (select protection_id from permissions where protection_bits = ?), ?, ?, ?, ?, ?, ?, ?, ?)");
+							+ "values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
 
 			pst.setString(1, args.getFileName());
 			pst.setString(2, args.getFilePath());
 			pst.setInt(3, 0);
-			pst.setString(4, args.getProtection());
+			pst.setInt(4, args.getProtection());
 			pst.setInt(5, new Integer(args.getOwner()));
-			pst.setInt(6, 0);
+			pst.setInt(6, new Integer(args.getGroup()));
 			pst.setInt(7, 0);
 			pst.setInt(8, new Integer(args.getOwner()));
 			pst.setString(9, CommonUtils.getCurrentTime());
 			pst.setString(10, CommonUtils.getCurrentTime());
 			pst.setString(11, CommonUtils.getCurrentTime());
-			pst.setBoolean(12, true);
+			pst.setBoolean(12, args.isDirectory());
 
 			if (0 == pst.executeUpdate())
 			{
@@ -590,12 +596,13 @@ public class FileOperationsDAO
 			con = DBUtils.getDbConnection();
 
 			pst = con.prepareStatement("update fstat "
-					+ "set protection = (select protection_id from permissions where protection_bits = ? ), "
-					+ "owner_id = ?, last_access_time = now(), modified_time = now() " + "where inode = ?;");
+					+ "set protection = ?, "
+					+ "owner_id = ?, group_id = ?, last_access_time = now(), modified_time = now() " + "where inode = ?;");
 
-			pst.setString(1, args.getProtection());
-			pst.setString(2, args.getOwner());
-			pst.setInt(3, args.getInode());
+			pst.setInt(1, args.getProtection());
+			pst.setInt(2, new Integer(args.getOwner()));
+			pst.setInt(3, new Integer(args.getGroup()));
+			pst.setInt(4, args.getInode());
 
 			if (0 == pst.executeUpdate())
 			{
@@ -627,145 +634,170 @@ public class FileOperationsDAO
 
 	}
 
-	public static Map<Integer, FileData> getFilesToDelete(FileArgs args)
-	{
-		// TODO Auto-generated method stub
-		boolean errorFlag = false;
-		Map<Integer, FileData> map = new HashMap<Integer, FileData>();
+    public static Map<Integer, FileData> getFilesToDelete(FileArgs args)
+    {
+        // TODO Auto-generated method stub
+        boolean errorFlag = false;
+        Map<Integer, FileData> map = new HashMap<Integer, FileData>();
 
-		Connection con = null;
-		PreparedStatement pst = null;
-		ResultSet rs = null;
+        Connection con = null;
+        PreparedStatement pst = null;
+        ResultSet rs = null;
 
-		String query = "select f.inode,f.file_name, f.file_path, f.file_size, "
-				+ "f.is_directory, d.file_name as 'cloud_file_name', d.file_size as 'cloud_file_size', "
-				+ "d.sequence, c.* " + "from (fstat f inner join destination_cloud d right outer join "
-				+ "cloud_metadata c on f.inode = d.inode and d.device_id = c.device_id) "
-				+ "where f.file_path like ? order by f.inode;";
-		// + "where f.file_path like '/home/test/large/%' order by d.sequence;";
+        //String query = "select f.inode,f.file_name, f.file_path, f.file_size, "
+        //		+ "f.is_directory, d.file_name as 'cloud_file_name', d.file_size as 'cloud_file_size', "
+        //		+ "d.sequence, c.* " + "from (fstat f inner join destination_cloud d right outer join "
+        //		+ "cloud_metadata c on f.inode = d.inode and d.device_id = c.device_id) "
+        //		+ "where f.file_path like ? order by f.inode;";
+        // + "where f.file_path like '/home/test/large/%' order by d.sequence;";
 
-		try
-		{
-			con = DBUtils.getDbConnection();
+        String query = "(select " +
+                "f.inode,f.file_name, f.file_path, f.file_size, f.is_directory, d.file_name as 'cloud_file_name', " +
+                "d.file_size as 'cloud_file_size', d.sequence, c.* " +
+                "from " +
+                "(fstat f " +
+                "left outer join destination_cloud d on f.inode = d.inode " +
+                "left outer join " +
+                "cloud_metadata c on d.device_id = c.device_id) " +
+                "where f.file_path like ? order by f.inode) " +
+                "union " +
+                "( " +
+                "select " +
+                "f.inode,f.file_name, f.file_path, f.file_size, f.is_directory, " +
+                "null as 'cloud_file_name', " +
+                "null as 'cloud_file_size', " +
+                "null as sequence, " +
+                "null as device_id, null as access_token, null as device_type, null as free_space " +
+                "from " +
+                "fstat f " +
+                "where f.file_name = ? and f.file_path = ? " +
+                ")";
 
-			pst = con.prepareStatement(query);
+        try
+        {
+            con = DBUtils.getDbConnection();
 
-			String notes = args.getFilePath() + args.getFileName() + "/";
-			notes = notes.replace("!", "!!").replace("%", "!%").replace("_", "!_").replace("[", "![");
+            pst = con.prepareStatement(query);
 
-			// pst.setString(1, (args.getFilePath() + args.getFileName() + "/%"));
-			pst.setString(1, notes + "%");
+            String notes = args.getFilePath() + args.getFileName() + "/";
+            notes = notes.replace("!", "!!").replace("%", "!%").replace("_", "!_").replace("[", "![");
 
-			System.out.println(pst);
+            // pst.setString(1, (args.getFilePath() + args.getFileName() + "/%"));
+            pst.setString(1, notes + "%");
+            pst.setString(2, args.getFileName());
+            pst.setString(3, args.getFilePath());
 
-			rs = pst.executeQuery();
+            System.out.println("Delete query: " + pst);
 
-			List<FileSplit> splitList = new ArrayList<FileSplit>();
-			int currentInode = 0;
-			int splitCounter = 0;
+            rs = pst.executeQuery();
 
-			FileData fdd = null;
+            List<FileSplit> splitList = new ArrayList<FileSplit>();
+            int currentInode = 0;
+            int splitCounter = 0;
 
-			while (rs.next())
-			{
-				System.out.println("test");
-				System.out.println(rs.isLast());
-				currentInode = rs.getInt("inode");
+            FileData fdd = null;
 
-				FileSplit f = new FileSplit();
-				DeviceData d = new DeviceData();
+            while (rs.next())
+            {
+                System.out.println("test");
+                System.out.println(rs.isLast());
+                currentInode = rs.getInt("inode");
 
-				f.setFileName(rs.getString("cloud_file_name"));
-				f.setSplitSize(rs.getInt("cloud_file_size"));
-				f.setSequence(rs.getInt("sequence"));
+                FileSplit f = new FileSplit();
+                DeviceData d = new DeviceData();
 
-				d.setDeviceId(rs.getInt("device_id"));
-				d.setDeviceType(rs.getString("device_type"));
-				d.setFreeSpace(rs.getInt("free_space"));
-				d.setToken(rs.getString("access_token"));
+                f.setFileName(rs.getString("cloud_file_name"));
+                f.setSplitSize(rs.getInt("cloud_file_size"));
+                f.setSequence(rs.getInt("sequence"));
 
-				f.setDeviceInfo(d);
+                d.setDeviceId(rs.getInt("device_id"));
+                d.setDeviceType(rs.getString("device_type"));
+                d.setFreeSpace(rs.getInt("free_space"));
+                d.setToken(rs.getString("access_token"));
 
-				splitList.add(f);
+                f.setDeviceInfo(d);
 
-				if (rs.isLast() || (!rs.isLast() && !checkIfNextIsSameInode(rs, currentInode)))
-				{
+                splitList.add(f);
 
-					fdd = new FileData();
+                if (rs.isLast() || (!rs.isLast() && !checkIfNextIsSameInode(rs, currentInode)))
+                {
 
-					// set file data fields
-					fdd.setInode(rs.getInt("inode"));
-					fdd.setFileName(rs.getString("file_name"));
-					fdd.setFilePath(rs.getString("file_path"));
-					fdd.setFileSize(rs.getInt("file_size"));
-					fdd.setDirectory(rs.getBoolean("is_directory"));
-					fdd.setNoOfSplits(splitCounter);
+                    fdd = new FileData();
 
-					// add file split to it
-					List<FileSplit> temp = new ArrayList<FileSplit>();
-					temp.addAll(splitList);
-					fdd.setSplitDataList(temp);
-					splitList.clear();
+                    // set file data fields
+                    fdd.setInode(rs.getInt("inode"));
+                    fdd.setFileName(rs.getString("file_name"));
+                    fdd.setFilePath(rs.getString("file_path"));
+                    fdd.setFileSize(rs.getInt("file_size"));
+                    fdd.setDirectory(rs.getBoolean("is_directory"));
+                    fdd.setNoOfSplits(splitCounter);
 
-					// add to map
-					map.put(new Integer(currentInode), fdd);
+                    // add file split to it
+                    List<FileSplit> temp = new ArrayList<FileSplit>();
+                    temp.addAll(splitList);
+                    fdd.setSplitDataList(temp);
+                    splitList.clear();
 
-					splitCounter = 1;
+                    // add to map
+                    map.put(new Integer(currentInode), fdd);
 
-				}
-			}
+                    splitCounter = 1;
 
-		}
-		catch (Exception e)
-		{
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-			errorFlag = true;
+                }
+            }
 
-			try
-			{
-				con.rollback();
-			}
-			catch (SQLException e1)
-			{
-				// TODO Auto-generated catch block
-				e1.printStackTrace();
-			}
-		}
+        }
+        catch (Exception e)
+        {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+            errorFlag = true;
 
-		if (!DBUtils.closeDbConnection(con, pst, rs))
-			System.out.println("Error occured");
+            try
+            {
+                con.rollback();
+            }
+            catch (SQLException e1)
+            {
+                // TODO Auto-generated catch block
+                e1.printStackTrace();
+            }
+        }
 
-		return map;
+        if (!DBUtils.closeDbConnection(con, pst, rs))
+            System.out.println("Error occured");
 
-		// return errorFlag;
+        return map;
 
-	}
+        // return errorFlag;
 
-	private static boolean checkIfNextIsSameInode(ResultSet rs, int currentInode)
-	{
-		// TODO Auto-generated method stub
-		try
-		{
-			if (!rs.isLast())
-			{
-				rs.next();
-				if (rs.getInt("inode") == currentInode)
-				{
-					rs.previous();
-					return true;
-				}
-			}
+    }
 
-			return false;
-		}
-		catch (SQLException e)
-		{
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-			return false;
-		}
-	}
+    private static boolean checkIfNextIsSameInode(ResultSet rs, int currentInode)
+    {
+        // TODO Auto-generated method stub
+        try
+        {
+            if (!rs.isLast())
+            {
+                rs.next();
+                if (rs.getInt("inode") == currentInode)
+                {
+                    rs.previous();
+                    return true;
+                }
+                rs.previous();
+            }
+
+            return false;
+        }
+        catch (SQLException e)
+        {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+            return false;
+        }
+    }
 
 	public static boolean deleteFilesFromDB(Map<Integer, FileData> map)
 	{
@@ -871,11 +903,11 @@ public class FileOperationsDAO
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
-		
+
 		if (!DBUtils.closeDbConnection(con, pst, rs))
 			System.out.println("Error occured");
-		
-		return inodeDetailsOfMemebrs; 
+
+		return inodeDetailsOfMemebrs;
 	}
 
 	public static List<FstatResponse> getFstatResponse(int inode, String fileName, String filePath)
@@ -883,29 +915,30 @@ public class FileOperationsDAO
 		// TODO Auto-generated method stub
 		StringBuilder sb = new StringBuilder();
 		sb.append("select * from fstat where file_name = ? and file_path = ? ");
-		List<FstatResponse> resp = new ArrayList<FstatResponse>(); 
-		 		
+		List<FstatResponse> resp = new ArrayList<FstatResponse>();
+        FileOperationsDAO obj = new FileOperationsDAO();
+
 		if(inode != -1)
 			sb.append("and inode = ?");
-		
+
 		Connection con = null;
 		PreparedStatement pst = null;
 		ResultSet rs = null;
-		
+
 		try
 		{
 			con = DBUtils.getDbConnection();
 
 			pst = con.prepareStatement(sb.toString());
-			
+
 			pst.setString(1, fileName);
 			pst.setString(2, filePath);
-			
+
 			if(inode != -1)
 				pst.setInt(3, inode);
 
 			System.out.println(pst);
-			
+
 			rs = pst.executeQuery();
 
 			while (rs.next())
@@ -921,10 +954,12 @@ public class FileOperationsDAO
 				temp.setSt_size(rs.getInt("file_size"));
 				temp.setSt_blksize(0);
 				temp.setSt_blocks(0);
-				temp.setSt_atime(CommonUtils.getEpochFromStringDate(rs.getString("last_access_time")));
-				temp.setSt_mtime(CommonUtils.getEpochFromStringDate(rs.getString("modified_time")));
-				temp.setSt_ctime(CommonUtils.getEpochFromStringDate(rs.getString("creation_time")));
-								
+//				temp.setSt_atime(CommonUtils.getEpochFromStringDate(rs.getString("last_access_time")));
+//				temp.setSt_mtime(CommonUtils.getEpochFromStringDate(rs.getString("modified_time")));
+//				temp.setSt_ctime(CommonUtils.getEpochFromStringDate(rs.getString("creation_time")));
+                temp.setSt_atime(obj.dF.parse(rs.getString("last_access_time")).getTime());
+                temp.setSt_mtime(obj.dF.parse(rs.getString("modified_time")).getTime());
+                temp.setSt_ctime(obj.dF.parse(rs.getString("creation_time")).getTime());
 				resp.add(temp);
 			}
 		}
@@ -933,11 +968,13 @@ public class FileOperationsDAO
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 			return null;
-		}
-		
-		if (!DBUtils.closeDbConnection(con, pst, rs))
+		} catch (ParseException e) {
+            e.printStackTrace();
+        }
+
+        if (!DBUtils.closeDbConnection(con, pst, rs))
 			System.out.println("Error occured");
-		
+
 		return resp;
 	}
 
@@ -947,28 +984,29 @@ public class FileOperationsDAO
 		String fileName = args.getFileName();
 		String filePath = args.getFilePath();
 		List<FstatResponse> resp = new ArrayList<FstatResponse>();
-		
+
 		Connection con = null;
 		PreparedStatement pst = null;
 		ResultSet rs = null;
-		
+
 		String query = "select * from fstat where file_path like ?;";
-		
+
 		String notes = args.getFilePath() + args.getFileName() + "/";
-		notes = notes.replace("!", "!!").replace("%", "!%").replace("_", "!_").replace("[", "![");		
-		
+		notes = notes.replace("!", "!!").replace("%", "!%").replace("_", "!_").replace("[", "![");
+
 		try
 		{
 			con = DBUtils.getDbConnection();
 
 			pst = con.prepareStatement(query);
-			
+
 			// pst.setString(1, (args.getFilePath() + args.getFileName() + "/%"));
-			pst.setString(1, notes + "%");						
+			pst.setString(1, notes + "%");
 
 			System.out.println(pst);
-			
+
 			rs = pst.executeQuery();
+			FileOperationsDAO obj = new FileOperationsDAO();
 
 			while (rs.next())
 			{
@@ -983,10 +1021,13 @@ public class FileOperationsDAO
 				temp.setSt_size(rs.getInt("file_size"));
 				temp.setSt_blksize(0);
 				temp.setSt_blocks(0);
-				temp.setSt_atime(CommonUtils.getEpochFromStringDate(rs.getString("last_access_time")));
-				temp.setSt_mtime(CommonUtils.getEpochFromStringDate(rs.getString("modified_time")));
-				temp.setSt_ctime(CommonUtils.getEpochFromStringDate(rs.getString("creation_time")));
-								
+//				temp.setSt_atime(CommonUtils.getEpochFromStringDate(rs.getString("last_access_time")));
+//				temp.setSt_mtime(CommonUtils.getEpochFromStringDate(rs.getString("modified_time")));
+//				temp.setSt_ctime(CommonUtils.getEpochFromStringDate(rs.getString("creation_time")));
+                temp.setSt_atime(obj.dF.parse(rs.getString("last_access_time")).getTime());
+                temp.setSt_mtime(obj.dF.parse(rs.getString("modified_time")).getTime());
+                temp.setSt_ctime(obj.dF.parse(rs.getString("creation_time")).getTime());
+
 				resp.add(temp);
 			}
 		}
@@ -995,110 +1036,137 @@ public class FileOperationsDAO
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 			return null;
-		}
-		
-		if (!DBUtils.closeDbConnection(con, pst, rs))
+		} catch (ParseException e) {
+            e.printStackTrace();
+        }
+
+        if (!DBUtils.closeDbConnection(con, pst, rs))
 			System.out.println("Error occured");
-		
+
 		return resp;
 	}
 
 	public String getParent(String child){
-        String parent = "";
-        query = "select file_path from fstat where file_name = ?";
-        try {
-            pst = connObj.prepareStatement(query);
-            pst.setString(1, child);
-            rs = pst.executeQuery();
-            String parentPath = "";
-            while (rs.next()) {
+		String parent = "";
+		query = "select file_path from fstat where file_name = ?";
+		try {
+			pst = connObj.prepareStatement(query);
+			pst.setString(1, child);
+			rs = pst.executeQuery();
+			String parentPath = "";
+			while (rs.next()) {
 //                System.out.println(rs.getString("file_path"));
-                parentPath = rs.getString("file_path");
-            }
-            if(parentPath.equals("")){
-                parent ="";
-            }
-            else if (parentPath.equals("/")){
-                parent = parentPath;
-            }
-            else{
-                String split[] = parentPath.split("/");
-                parent = split[split.length-1];
-            }
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
+				parentPath = rs.getString("file_path");
+			}
+			if(parentPath.equals("")){
+				parent ="";
+			}
+			else if (parentPath.equals("/")){
+				parent = parentPath;
+			}
+			else{
+				String split[] = parentPath.split("/");
+				parent = split[split.length-1];
+			}
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
 //        System.out.println(parent);
-        return  parent;
-    }
-
-
-	public List<String> getDirEnt(String folderPath){
-	    List<String> dirEnt = new ArrayList<>();
-	    String split[] = folderPath.split("/");
-        String currFolder;
-	    if (split.length == 0){
-            currFolder = "/";
-        }
-	    else{
-	        currFolder = split[split.length-1];
-        }
-	    dirEnt.add(currFolder);
-        dirEnt.add(getParent(currFolder));
-        query = "select file_name from fstat where file_path = ?";
-        try {
-
-            pst = connObj.prepareStatement(query);
-            pst.setString(1, folderPath);
-            rs = pst.executeQuery();
-            while (rs.next())
-            {
-//                System.out.println(rs.getString("file_name"));
-                dirEnt.add(rs.getString("file_name"));
-            }
-
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-
-        return dirEnt;
+		return  parent;
 	}
 
 
-    public FstatResponse getFstat(FileArgs args) {
-        String fileName = args.getFileName();
-        String filePath = args.getFilePath();
-        FstatResponse temp = new FstatResponse();
-        query = "select * from fstat where file_path = ? and file_name = ?";
+	public List<String> getDirEnt(String folderPath){
+		List<String> dirEnt = new ArrayList<>();
+		String split[] = folderPath.split("/");
+		String currFolder;
+		if (split.length == 0){
+			currFolder = "/";
+		}
+		else{
+			currFolder = split[split.length-1];
+		}
+		dirEnt.add(currFolder);
+		dirEnt.add(getParent(currFolder));
+		query = "select file_name from fstat where file_path = ?";
+		try {
+
+			pst = connObj.prepareStatement(query);
+			pst.setString(1, folderPath);
+			rs = pst.executeQuery();
+			while (rs.next())
+			{
+//                System.out.println(rs.getString("file_name"));
+				dirEnt.add(rs.getString("file_name"));
+			}
+
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
+
+		return dirEnt;
+	}
+
+
+	public FstatResponse getFstat(FileArgs args) {
+		String fileName = args.getFileName();
+		String filePath = args.getFilePath();
+		FstatResponse temp = new FstatResponse();
+		query = "select * from fstat where file_path = ? and file_name = ?";
+		try {
+			pst = connObj.prepareStatement(query);
+			pst.setString(1, filePath);
+			pst.setString(2, fileName);
+			rs = pst.executeQuery();
+			while (rs.next())
+			{
+				temp.setSt_dev(0); // ?
+				temp.setSt_ino(rs.getInt("inode"));
+				temp.setSt_mode(rs.getInt("protection"));
+				temp.setSt_nlink(rs.getInt("hard_links"));
+				temp.setSt_uid(rs.getInt("owner_id"));
+				temp.setSt_gid(rs.getInt("group_id"));
+				temp.setSt_rdev(0); // ?
+				temp.setSt_size(rs.getInt("file_size"));
+				temp.setSt_blksize(0);
+				temp.setSt_blocks(0);
+				temp.setSt_isdir(rs.getInt("is_directory"));
+//				temp.setSt_atime(CommonUtils.getEpochFromStringDate(rs.getString("last_access_time")));
+//				temp.setSt_mtime(CommonUtils.getEpochFromStringDate(rs.getString("modified_time")));
+//				temp.setSt_ctime(CommonUtils.getEpochFromStringDate(rs.getString("creation_time")));
+			    temp.setSt_atime(dF.parse(rs.getString("last_access_time")).getTime());
+			    temp.setSt_mtime(dF.parse(rs.getString("modified_time")).getTime());
+			    temp.setSt_ctime(dF.parse(rs.getString("creation_time")).getTime());
+
+			}
+		} catch (SQLException | ParseException e) {
+			e.printStackTrace();
+		}
+
+        return temp;
+	}
+
+
+    public int getInode(String fileName, String filePath, String owner, String group ){
+        query = "select inode from fstat where "+
+                "file_path = ? and file_name = ? and owner_id = ? and group_id = ?";
+        int inode = -1;
         try {
             pst = connObj.prepareStatement(query);
             pst.setString(1, filePath);
             pst.setString(2, fileName);
+            pst.setInt(3, Integer.parseInt(owner));
+            pst.setInt(4, Integer.parseInt(group));
             rs = pst.executeQuery();
             while (rs.next())
             {
-                temp.setSt_dev(0); // ?
-                temp.setSt_ino(rs.getInt("inode"));
-                temp.setSt_mode(rs.getInt("protection"));
-                temp.setSt_nlink(rs.getInt("hard_links"));
-                temp.setSt_uid(rs.getInt("owner_id"));
-                temp.setSt_gid(rs.getInt("group_id"));
-                temp.setSt_rdev(0); // ?
-                temp.setSt_size(rs.getInt("file_size"));
-                temp.setSt_blksize(0);
-                temp.setSt_blocks(0);
-                temp.setSt_isdir(rs.getInt("is_directory"));
-                temp.setSt_atime(CommonUtils.getEpochFromStringDate(rs.getString("last_access_time")));
-                temp.setSt_mtime(CommonUtils.getEpochFromStringDate(rs.getString("modified_time")));
-                temp.setSt_ctime(CommonUtils.getEpochFromStringDate(rs.getString("creation_time")));
+                inode = rs.getInt("inode");
             }
         } catch (SQLException e) {
             e.printStackTrace();
         }
-
-        return temp;
+        return inode;
     }
-
 
 
 }
