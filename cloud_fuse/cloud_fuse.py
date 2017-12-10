@@ -18,12 +18,57 @@ from fuse import FUSE, FuseOSError, Operations
 from py4j.java_gateway import JavaGateway, GatewayParameters
 
 class DropBox(Operations):
+
     # ============================= #
     # Constructor for Class Dropbox #
     # ============================= #
     def __init__(self, root, app=None):
         self.root = root
         self.app = app
+        self.cache = {}
+
+    ## cache function
+    def cache_lookup(self, key):
+        print '()()()()()()()()   CACHE LOOKUP ()()()()()()()()'
+        print self.cache
+        print '()()()()()()()()   CACHE LOOKUP ()()()()()()()()'
+        if key in self.cache:
+            return self.cache[key]
+        else:
+            return None
+
+    def cache_update(self, key, val):
+        print '()()()()()()()()   CACHE UPDATE ()()()()()()()()'
+        self.cache[key] = val
+        print self.cache
+        print '()()()()()()()()   CACHE UPDATE ()()()()()()()()'
+
+    def getFstat(self, key):
+        fStat = self.cache_lookup(key)
+        if fStat is not None:
+            return fStat
+        fStat = self.app.getFstat(key[0], key[1])
+        self.cache_update(key, fStat)
+        return fStat
+
+    def isdir(self, path):
+        filename,pathname = self.get_file_and_path_name(path)
+        fStat = json.loads(self.getFstat((filename, pathname)))
+        if fStat[u'st_isdir'] == 1:
+            return True
+        return False
+
+    def get_file_and_path_name(self, get_mnt_path):
+        if get_mnt_path[-1] == "/":
+            index = 2
+        else:
+            index = 1
+        print "**********mount path********", get_mnt_path
+        splitted = get_mnt_path.split("/")
+        filename = splitted[-index]
+        pathname = ("/".join(splitted[:-index]))+"/"
+        print "*******Filename, Pathname*******", filename, pathname
+        return filename, pathname
 
     # =============================================================================================== #
     #                                       Helper Functions                                          #
@@ -59,8 +104,8 @@ class DropBox(Operations):
         self.log_func_name()
         logging.info("\npath = %s,type=%s\nmode = %s,type=%s" % (
              str(get_mnt_path), type(get_mnt_path), str(mode), type(mode)))
-        if not os.access(get_mnt_path, mode):
-            raise FuseOSError(errno.EACCES)
+        # if not os.access(get_mnt_path, mode):
+        #     raise FuseOSError(errno.EACCES)
 
     def chmod(self, path, mode):
         get_mnt_path = self._get_mnt_path(path)
@@ -99,24 +144,22 @@ class DropBox(Operations):
         #     print "fh : " + fh
 
         get_mnt_path = self._get_mnt_path(path)
-        st = os.lstat(get_mnt_path)
-        print st
-        print type(st)
-        
-        splitted = get_mnt_path.split("/")
-        filename = splitted[-2]
-        pathname = ("/".join(splitted[:-2]))+"/"
-        print filename, pathname
+        #st = os.lstat(get_mnt_path)
+        #print st
+        #print type(st)
+        filename, pathname = self.get_file_and_path_name(get_mnt_path)
 
         # Calling AWS Java Server #
-        st1 = json.loads(self.app.getFstat(filename, pathname))
-        st2 = ast.literal_eval(json.dumps(st1))
-        print st2
-        print type(st2)
+        ##############st1 = json.loads(self.app.getFstat(filename, pathname))
+        st1 = json.loads(self.getFstat((filename, pathname)))
+        print "************mystat************", st1, type(st1)
+        # st2 = ast.literal_eval(json.dumps(st1))
+        # print st2
+        # print type(st2)
         st3 = {}
-        for key, val in st2.iteritems():
-            if key in ['st_atime', 'st_ctime', 'st_gid','st_mode','st_mtime','st_nlink','st_size','st_uid'] :
-                st3[key] = st2[key]
+        for key, val in st1.iteritems():
+            if key in [u'st_atime', u'st_ctime', u'st_gid', u'st_mode', u'st_mtime', u'st_nlink', u'st_size', u'st_uid'] :
+                st3[key] = st1[key]
         print '*****************************************************************'
         print st3
         print type(st3)
@@ -125,21 +168,21 @@ class DropBox(Operations):
         # Logging #
         self.log_func_name()
         logging.info("\npath = %s,type=%s\nstat = %s,type=%s" % (
-             str(get_mnt_path), type(get_mnt_path), str(st), type(st)))
+             str(get_mnt_path), type(get_mnt_path), str(st3), type(st3)))
     
-        temp = dict((key, getattr(st, key)) for key in ('st_atime',
-            'st_ctime',
-            'st_gid',
-            'st_mode',
-            'st_mtime',
-            'st_nlink',
-            'st_size',
-            'st_uid'))
+        # temp = dict((key, getattr(st, key)) for key in ('st_atime',
+        #     'st_ctime',
+        #     'st_gid',
+        #     'st_mode',
+        #     'st_mtime',
+        #     'st_nlink',
+        #     'st_size',
+        #     'st_uid'))
 
-        print "--------------------------------------------------"
-        print temp
-        print type(temp)
-        print "--------------------------------------------------"
+        # print "--------------------------------------------------"
+        # print temp
+        # print type(temp)
+        # print "--------------------------------------------------"
 
         # return temp
         return st3
@@ -155,7 +198,7 @@ class DropBox(Operations):
 
         print "====================================="
         print "====================================="
-        print get_mnt_path
+        print "Mount Path:", get_mnt_path
         print "====================================="
         print "====================================="
 
@@ -166,15 +209,16 @@ class DropBox(Operations):
 
         print "====================================="
         print "====================================="
-        print pathname
+        print "Pathname:", pathname
         print "====================================="
         print "====================================="
 
         dirents = ['.', '..']
         dir_ent = self.app.readDir(pathname)
+        print "Directory entry received:", dir_ent
 
-        if os.path.isdir(get_mnt_path):
-            #dirents.extend(os.listdir(get_mnt_path))
+        # if os.path.isdir(get_mnt_path):
+        if self.isdir(get_mnt_path):
             dirents.extend(dir_ent[2:])
 
         # Logging #
