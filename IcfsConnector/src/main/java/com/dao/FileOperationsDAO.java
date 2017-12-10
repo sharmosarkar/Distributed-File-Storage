@@ -1012,7 +1012,7 @@ public class FileOperationsDAO
             rs = pst.executeQuery();
             String parentPath = "";
             while (rs.next()) {
-                System.out.println(rs.getString("file_path"));
+//                System.out.println(rs.getString("file_path"));
                 parentPath = rs.getString("file_path");
             }
             if(parentPath.equals("")){
@@ -1028,7 +1028,7 @@ public class FileOperationsDAO
         } catch (SQLException e) {
             e.printStackTrace();
         }
-        System.out.println(parent);
+//        System.out.println(parent);
         return  parent;
     }
 
@@ -1087,10 +1087,10 @@ public class FileOperationsDAO
                 temp.setSt_size(rs.getInt("file_size"));
                 temp.setSt_blksize(0);
                 temp.setSt_blocks(0);
+                temp.setSt_isdir(rs.getInt("is_directory"));
                 temp.setSt_atime(CommonUtils.getEpochFromStringDate(rs.getString("last_access_time")));
                 temp.setSt_mtime(CommonUtils.getEpochFromStringDate(rs.getString("modified_time")));
                 temp.setSt_ctime(CommonUtils.getEpochFromStringDate(rs.getString("creation_time")));
-
             }
         } catch (SQLException e) {
             e.printStackTrace();

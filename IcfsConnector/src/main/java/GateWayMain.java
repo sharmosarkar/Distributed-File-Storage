@@ -141,8 +141,13 @@ public class GateWayMain
 		}
 		server.start();
 
-//        app.readDir("/");
-
+//        String sss = app.getFstat("home", "/tmp/nipesh/");
+//        System.out.println(sss);
+//        List<String> dirEnt = new ArrayList<String>();
+//        dirEnt = app.readDir("/tmp/nipesh/");
+//        for (String s: dirEnt) {
+//            System.out.println(s);
+//        }
 
 	}
 

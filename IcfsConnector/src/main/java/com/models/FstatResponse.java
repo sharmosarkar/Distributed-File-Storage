@@ -15,6 +15,7 @@ public class FstatResponse
 	private long st_atime;
 	private long st_mtime;
 	private long st_ctime;
+	private long st_isdir;
 	
 	public int getSt_dev()
 	{
@@ -120,7 +121,10 @@ public class FstatResponse
 	{
 		this.st_ctime = st_ctime;
 	}
-
+	public void setSt_isdir(int st_isdir)
+	{
+		this.st_isdir = st_isdir;
+	}
 	
 	
 }
