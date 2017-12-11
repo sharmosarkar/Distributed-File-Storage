@@ -41,11 +41,13 @@ public class IcfsMain
 				break;
 
 			case "read":
+				response = new ReadFile().readFile(fileArgs);
+				System.out.println("Read file resp : " + (response.isEmpty() ? "" : (new Gson().toJson(response.get(0)))));
 				break;
 
 			case "update":
 				//resp = new UpdateFile().updateFile(fileArgs);
-				response = new CreateFile().createFile(fileArgs);
+				response = new UpdateFile().updateFile(fileArgs);
 				//System.out.println("Update resp: " + resp.getResponseCode() + " - " + resp.getResponseMessage());
 				//System.out.println(new Gson().toJson(response));
 				System.out.println(response.isEmpty() ? "" : (new Gson().toJson(response.get(0))));

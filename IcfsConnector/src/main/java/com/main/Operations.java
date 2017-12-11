@@ -29,4 +29,8 @@ public class Operations {
     public int getInode(String fileName, String filePath, String owner, String group ){
         return obj.getInode( fileName,  filePath,  owner,  group );
     }
+
+    public boolean deleteDir(String filename, String filepath){
+        return obj.deleteDir(filename, filepath);
+    }
 }
