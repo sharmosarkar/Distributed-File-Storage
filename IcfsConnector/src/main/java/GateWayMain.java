@@ -18,6 +18,7 @@ public class GateWayMain
 
 	public String createFile(String fileName, String filePath, String localFilePath, int fileSize, int protection, String owner, String group, boolean isDirectory)
 	{
+        fileName = (fileName+"_#_"+filePath).replace("/","_");
 		CreateFile cf = new CreateFile();
 		FileArgs args = new FileArgs();
 		args.setFileName(fileName);
@@ -43,6 +44,7 @@ public class GateWayMain
 	}
 
 	public String updateFile(String fileName, String filePath, String localFilePath, int fileSize, int protection, String owner, String group,boolean isDirectory){
+        fileName = (fileName+"_#_"+filePath).replace("/","_");
 	    int inode = opObj.getInode( fileName,  filePath,  owner,  group );
 	    if (inode == -1){
 	        return createFile(fileName,filePath,localFilePath,fileSize,protection,owner,group,isDirectory);
@@ -77,9 +79,28 @@ public class GateWayMain
 		//return new Gson().toJson(r);
 	}
 
+    public String readFile(String fileName, String filePath, String localFilePath)
+    {
+        fileName = (fileName+"_#_"+filePath).replace("/","_");
+        ReadFile rf = new ReadFile();
+        FileArgs args = new FileArgs();
+        args.setFileName(fileName);
+        args.setFilePath(filePath);
+        args.setLocalFilePath(localFilePath);
+
+        List<FstatResponse> r = rf.readFile(args);
+
+        if(r == null || (r != null & r.isEmpty()))
+            return "";
+        else
+            return new Gson().toJson(r.get(0));
+
+    }
+
 	public String deleteFile(String fileName, String filePath)
 	{
-		DeleteFile df = new DeleteFile();
+        fileName = (fileName+"_#_"+filePath).replace("/","_");
+	    DeleteFile df = new DeleteFile();
 		FileArgs args = new FileArgs();
 		args.setFileName(fileName);
 		args.setFilePath(filePath);
@@ -90,7 +111,8 @@ public class GateWayMain
 
 	public String createDir(String fileName, String filePath, int protection, String owner, String group,boolean isDirectory)
 	{
-		CreateDirectory cf = new CreateDirectory();
+        fileName = (fileName+"_#_"+filePath).replace("/","_");
+	    CreateDirectory cf = new CreateDirectory();
 		FileArgs args = new FileArgs();
 		args.setFileName(fileName);
 		args.setFilePath(filePath);
@@ -126,7 +148,8 @@ public class GateWayMain
 
 	public String updateDir(String fileName, String filePath, int protection, String owner,String group, int inode, boolean isDirectory)
 	{
-		UpdateDirectory uf = new UpdateDirectory();
+        fileName = (fileName+"_#_"+filePath).replace("/","_");
+	    UpdateDirectory uf = new UpdateDirectory();
 		FileArgs args = new FileArgs();
 		args.setFileName(fileName);
 		args.setFilePath(filePath);
@@ -150,25 +173,28 @@ public class GateWayMain
 		//return new Gson().toJson(r);
 	}
 
-	public String deleteDir(String fileName, String filePath)
+	public Boolean deleteDir(String fileName, String filePath)
 	{
-		DeleteDirectory df = new DeleteDirectory();
+        fileName = (fileName+"_#_"+filePath).replace("/","_");
+	    DeleteDirectory df = new DeleteDirectory();
 		FileArgs args = new FileArgs();
 		args.setFileName(fileName);
 		args.setFilePath(filePath);
 
-		ResponseData r = df.deleteDirectory(args);
-		return new Gson().toJson(r);
+//		ResponseData r = df.deleteDirectory(args);
+//		return new Gson().toJson(r);
+        return opObj.deleteDir(fileName, filePath);
 	}
 
 	public List<String> readDir(String folderPath){
-		List<String> dirEnt = new ArrayList<String>();
+	    List<String> dirEnt = new ArrayList<String>();
 
 		dirEnt = opObj.readDir(folderPath);
 		return dirEnt;
 	}
 
 	public String getFstat(String fileName, String filePath){
+        fileName = (fileName+"_#_"+filePath).replace("/","_");
 		FileArgs args = new FileArgs();
 		args.setFileName(fileName);
 		args.setFilePath(filePath);

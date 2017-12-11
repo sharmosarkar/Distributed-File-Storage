@@ -1075,19 +1075,35 @@ public class FileOperationsDAO
 		return  parent;
 	}
 
+    public boolean deleteDir(String filename, String filepath)
+    {
+        boolean result = false;
+        query = "delete from fstat where file_name = ? and file_path = ?";
+        try {
+            pst = connObj.prepareStatement(query);
+            pst.setString(1, filename);
+            pst.setString(2, filepath);
+            if (0 != pst.executeUpdate())
+                result = true;
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return result;
+    }
+
 
 	public List<String> getDirEnt(String folderPath){
 		List<String> dirEnt = new ArrayList<>();
-		String split[] = folderPath.split("/");
-		String currFolder;
-		if (split.length == 0){
-			currFolder = "/";
-		}
-		else{
-			currFolder = split[split.length-1];
-		}
-		dirEnt.add(currFolder);
-		dirEnt.add(getParent(currFolder));
+//		String split[] = folderPath.split("/");
+//		String currFolder;
+//		if (split.length == 0){
+//			currFolder = "/";
+//		}
+//		else{
+//			currFolder = split[split.length-1];
+//		}
+//		dirEnt.add(currFolder);
+//		dirEnt.add(getParent(currFolder));
 		query = "select file_name from fstat where file_path = ?";
 		try {
 
@@ -1097,7 +1113,7 @@ public class FileOperationsDAO
 			while (rs.next())
 			{
 //                System.out.println(rs.getString("file_name"));
-				dirEnt.add(rs.getString("file_name"));
+				dirEnt.add(rs.getString("file_name").split("_#_")[0]);
 			}
 
 		} catch (SQLException e) {
