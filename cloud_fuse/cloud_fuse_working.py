@@ -35,6 +35,7 @@ class DropBox(Operations):
         self.default_file_type = 100000
         self.local_file_path = os.path.join(self.root, "dump")
         self.local_file_path += "/"
+        self.invalidate_cache_flag = 0
         if not os.path.exists(self.local_file_path):
             os.makedirs(self.local_file_path)
         self.init_create_mnt_dir()
@@ -82,7 +83,11 @@ class DropBox(Operations):
         #print '===============CACHE UPDATE================'
 
     def getFstat(self, key):
-        fStat = self.cache_lookup(key)
+        if self.invalidate_cache_flag == 0:
+            fStat = self.cache_lookup(key)
+        else:
+            fStat = json.loads(self.app.getFstat(key[0], key[1]))
+            print 'CLOUD !!!!!'
         if fStat is not None:
             return fStat
         fStat = json.loads(self.app.getFstat(key[0], key[1]))
@@ -108,7 +113,10 @@ class DropBox(Operations):
         splitted = mnt_path.split("/")
         filename = splitted[-index]
         pathname = ("/".join(splitted[:-index]))+"/"
-        print "*******Filename, Pathname*******", filename, pathname
+        print "*******Filename, Pathname*******", filename, type(filename), pathname
+        if ".hidden" in filename:
+            self.invalidate_cache_flag = 1
+            print "CACHE INVALIDATED"
         return filename, pathname
 
     # =============================================================================================== #
@@ -271,7 +279,7 @@ class DropBox(Operations):
         self.log_func_name()
         logging.info("\npath = %s,type=%s\nstat = %s,type=%s" % (
              str(mnt_path), type(mnt_path), str(stv), type(stv))) 
-        return dict((key, getattr(stv, key)) for key in ('f_bavail',
+        stat = dict((key, getattr(stv, key)) for key in ('f_bavail',
             'f_bfree',
             'f_blocks',
             'f_bsize',
@@ -281,6 +289,8 @@ class DropBox(Operations):
             'f_flag',
             'f_frsize',
             'f_namemax'))
+        stat['f_bsize'] = 10240000
+        return stat
 
     def unlink(self, path):
         mnt_path = self._get_mnt_path(path)
@@ -472,6 +482,8 @@ class DropBox(Operations):
              str(mnt_path), type(mnt_path)))
         ret = os.close(fh)
         #os.unlink(local_file_name)
+        # if self.invalidate_cache_flag == 1:
+        #     self.invalidate_cache_flag = 0
         return ret
 
     def fsync(self, path, fdatasync, fh):
