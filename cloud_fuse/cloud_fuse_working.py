@@ -67,9 +67,9 @@ class DropBox(Operations):
         return all(value == 0 for value in st.values())
 
     def cache_lookup(self, key):
-        print '===============CACHE LOOKUP================'
-        print self.cache
-        print '===============CACHE LOOKUP================'
+        #print '===============CACHE LOOKUP================'
+        #print self.cache
+        #print '===============CACHE LOOKUP================'
         if key in self.cache:
             return self.cache[key]
         else:
@@ -147,7 +147,8 @@ class DropBox(Operations):
         mnt_path = self._get_mnt_path(path)
         filename, pathname = self.get_file_and_path_name(mnt_path)
         local_file_name = os.path.join(self.local_file_path, filename)
-        local_file_name = local_file_name + "_#_" + pathname.replace("/","_")
+        if not filename.startswith(".goutputstream"):
+            local_file_name = local_file_name + "_#_" + pathname.replace("/","_")
         # Logging #
         self.log_func_name()
         logging.info("\npath = %s,type=%s\nmode = %s,type=%s" % (
@@ -158,7 +159,8 @@ class DropBox(Operations):
         mnt_path = self._get_mnt_path(path)
         filename, pathname = self.get_file_and_path_name(mnt_path)
         local_file_name = os.path.join(self.local_file_path, filename)
-        local_file_name = local_file_name + "_#_" + pathname.replace("/","_")
+        if not filename.startswith(".goutputstream"):
+            local_file_name = local_file_name + "_#_" + pathname.replace("/","_")
         # Logging #
         self.log_func_name()
         logging.info("\npath = %s,type=%s\nuid = %i,type=%s\ngid = %i,type=%s" % (
@@ -169,16 +171,22 @@ class DropBox(Operations):
         logging.info("\ngetattr")
         mnt_path = self._get_mnt_path(path)
         filename, pathname = self.get_file_and_path_name(mnt_path)
-        # Calling AWS Java Server #
-        st1 = self.getFstat((filename, pathname))
-        if st1 == {}:
-            raise FuseOSError(errno.ENOENT)
-        st = {}
-        for key, val in st1.iteritems():
-            if key in [u'st_gid', u'st_mode', u'st_nlink', u'st_size', u'st_uid']:
-                st[key] = st1[key]
-            if key in [u'st_atime', u'st_ctime',  u'st_mtime']:
-                st[key] = (st1[key] * 1.0) / 1000
+        if filename.startswith(".goutputstream"):
+            local_file_name = os.path.join(self.local_file_path, filename)
+            st1 = os.lstat(local_file_name)
+            st = dict((key, getattr(st1, key)) for key in ('st_atime', 'st_ctime',
+                'st_gid', 'st_mode', 'st_mtime', 'st_nlink', 'st_size', 'st_uid'))
+        else:
+            # Calling AWS Java Server #
+            st1 = self.getFstat((filename, pathname))
+            if st1 == {}:
+                raise FuseOSError(errno.ENOENT)
+            st = {}
+            for key, val in st1.iteritems():
+                if key in [u'st_gid', u'st_mode', u'st_nlink', u'st_size', u'st_uid']:
+                    st[key] = st1[key]
+                if key in [u'st_atime', u'st_ctime',  u'st_mtime']:
+                    st[key] = (st1[key] * 1.0) / 1000
         # Logging #
         self.log_func_name()
         logging.info("\npath = %s,type=%s\nstat = %s,type=%s" % (
@@ -281,12 +289,16 @@ class DropBox(Operations):
         self.log_func_name()
         logging.info("\npath = %s,type=%s" % (str(mnt_path), type(mnt_path)))
         # return os.unlink(mnt_path)
-        if not self.isdir(mnt_path):
-            # return os.unlink()
-            self.app.deleteFile(filename, pathname)
+        if filename.startswith(".goutputstream"):
+            local_file_name = os.path.join(self.local_file_path, filename)
+            os.unlink(local_file_name)
             return None
         else:
-            raise FuseOSError(errno.EISDIR)
+            if not self.isdir(mnt_path):
+                self.app.deleteFile(filename, pathname)
+                return None
+            else:
+                raise FuseOSError(errno.EISDIR)
 
     def symlink(self, name, target):
         mnt_name = self._get_mnt_path(name)
@@ -299,15 +311,31 @@ class DropBox(Operations):
         mnt_path_new = self._get_mnt_path(new)
         filename, pathname = self.get_file_and_path_name(mnt_path_old)
         local_file_name_old = os.path.join(self.local_file_path, filename)
-        local_file_name_old = local_file_name_old + "_#_" + pathname.replace("/","_")
+        if not filename.startswith(".goutputstream"):
+            local_file_name_old = local_file_name_old + "_#_" + pathname.replace("/","_")
         filename, pathname = self.get_file_and_path_name(mnt_path_new)
         local_file_name_new = os.path.join(self.local_file_path, filename)
         local_file_name_new = local_file_name_new + "_#_" + pathname.replace("/","_")
+        print "RENAME :", local_file_name_old, local_file_name_new
         # Logging #
         self.log_func_name()
         logging.info("\nold = %s,type=%s\nnew = %s,type=%s" % (
-            str(mnt_path_old), type(mnt_path_old), str(mnt_path_new), type(mnt_path_new)))
-        return os.rename(local_file_name_old, local_file_name_new)
+            str(local_file_name_old), type(local_file_name_old), str(local_file_name_new), type(local_file_name_new)))
+        ret = os.rename(local_file_name_old, local_file_name_new)
+        username = getpass.getuser()
+        uid = str(getpwnam(username).pw_uid)
+        gid = str(getpwnam(username).pw_gid)
+        is_dir = False
+        size = os.stat(local_file_name_new).st_size
+        file_mode = os.stat(local_file_name_new).st_mode
+        stat = json.loads(self.app.updateFile(filename,
+                pathname,
+                self.local_file_path,
+                size,
+                file_mode, uid, gid, is_dir))
+        print "Stat after write: ", stat
+        self.cache_update((filename, pathname), stat)
+        return ret;
 
     def link(self, target, name):
         mnt_name = self._get_mnt_path(name)
@@ -322,7 +350,8 @@ class DropBox(Operations):
         mnt_path = self._get_mnt_path(path)
         filename, pathname = self.get_file_and_path_name(mnt_path)
         local_file_name = os.path.join(self.local_file_path, filename)
-        local_file_name = local_file_name + "_#_" + pathname.replace("/","_")
+        if not filename.startswith(".goutputstream"):
+            local_file_name = local_file_name + "_#_" + pathname.replace("/","_")
         # Logging #     
         self.log_func_name()
         logging.info("\npath = %s,type=%s\ntimes = %s,type=%s, \nlocal_file_path=%s" % (
@@ -337,8 +366,9 @@ class DropBox(Operations):
         mnt_path = self._get_mnt_path(path)
         filename, pathname = self.get_file_and_path_name(mnt_path)
         local_file_name = os.path.join(self.local_file_path, filename)
-        local_file_name = local_file_name + "_#_" + pathname.replace("/","_")
-        stat = json.loads(self.app.readFile(filename, pathname, self.local_file_path))
+        if not filename.startswith(".goutputstream"):
+            local_file_name = local_file_name + "_#_" + pathname.replace("/","_")
+            stat = json.loads(self.app.readFile(filename, pathname, self.local_file_path))
         # Logging #
         self.log_func_name()
         logging.info("\npath = %s,type=%s\nflags = %s,type=%s,\nlocal_file_name=%s,\nlocal_file_path=%s" % (
@@ -352,7 +382,8 @@ class DropBox(Operations):
         file_mode = int(str(self.default_file_type + self.default_file_permission), 8)
         filename, pathname = self.get_file_and_path_name(mnt_path)
         local_file_name = os.path.join(self.local_file_path, filename)
-        local_file_name = local_file_name + "_#_" + pathname.replace("/","_")
+        if not filename.startswith(".goutputstream"):
+            local_file_name = local_file_name + "_#_" + pathname.replace("/","_")
         ret = os.open(local_file_name, os.O_WRONLY | os.O_CREAT, mode) 
         username = getpass.getuser()
         uid = str(getpwnam(username).pw_uid)
@@ -363,12 +394,13 @@ class DropBox(Operations):
         self.log_func_name()
         logging.info("\npath = %s,type=%s\nmode = %s,type=%s,\nlocal_file_name=%s,\nlocal_file_path=%s" % (
              str(mnt_path), type(mnt_path), str(mode), type(mode), str(local_file_name), str(self.local_file_path)))
-        stat = json.loads(self.app.createFile(filename,
-            pathname,
-            self.local_file_path,
-            size,
-            file_mode, uid, gid, is_dir))
-        self.cache_update((filename, pathname), stat)
+        if not filename.startswith(".goutputstream"):
+            stat = json.loads(self.app.createFile(filename,
+                pathname,
+                self.local_file_path,
+                size,
+                file_mode, uid, gid, is_dir))
+            self.cache_update((filename, pathname), stat)
         return ret
 
     def read(self, path, length, offset, fh):
@@ -387,7 +419,10 @@ class DropBox(Operations):
         file_mode = int(str(self.default_file_type + self.default_file_permission), 8)
         filename, pathname = self.get_file_and_path_name(mnt_path)
         local_file_name = os.path.join(self.local_file_path, filename)
-        local_file_name = local_file_name + "_#_" + pathname.replace("/","_")
+        if not filename.startswith(".goutputstream"):
+            local_file_name = local_file_name + "_#_" + pathname.replace("/","_")
+        print "Write:",local_file_name
+        print "Write:", buf
         ret = os.write(fh, buf)
         username = getpass.getuser()
         uid = str(getpwnam(username).pw_uid)
@@ -398,20 +433,22 @@ class DropBox(Operations):
         self.log_func_name()
         logging.info("\npath = %s,type=%s\noffset = %s,type=%s,\nlocal_file_name=%s,\nlocal_file_path=%s" % (
              str(mnt_path), type(mnt_path), str(offset), type(offset), str(local_file_name), str(self.local_file_path)))
-        stat = json.loads(self.app.updateFile(filename,
-            pathname,
-            self.local_file_path,
-            size,
-            file_mode, uid, gid, is_dir))
-        print "Stat after write: ", stat
-        self.cache_update((filename, pathname), stat)
+        if not filename.startswith(".goutputstream"):
+            stat = json.loads(self.app.updateFile(filename,
+                pathname,
+                self.local_file_path,
+                size,
+                file_mode, uid, gid, is_dir))
+            print "Stat after write: ", stat
+            self.cache_update((filename, pathname), stat)
         return ret
 
     def truncate(self, path, length, fh=None):
         mnt_path = self._get_mnt_path(path)
         filename, pathname = self.get_file_and_path_name(mnt_path)
         local_file_name = os.path.join(self.local_file_path, filename)
-        local_file_name = local_file_name + "_#_" + pathname.replace("/","_")
+        if not filename.startswith(".goutputstream"):
+            local_file_name = local_file_name + "_#_" + pathname.replace("/","_")
         # Logging #
         self.log_func_name()
         logging.info("\npath = %s,type=%s\nlength = %s,type=%s" % (
@@ -429,9 +466,6 @@ class DropBox(Operations):
 
     def release(self, path, fh):
         mnt_path = self._get_mnt_path(path)
-        #filename, pathname = self.get_file_and_path_name(mnt_path)
-        #local_file_name = os.path.join(self.local_file_path, filename)
-        #local_file_name = local_file_name + "_#_" + pathname.replace("/","_")
         # Logging #
         self.log_func_name()
         logging.info("\npath = %s,type=%s" % (
@@ -442,10 +476,15 @@ class DropBox(Operations):
 
     def fsync(self, path, fdatasync, fh):
         mnt_path = self._get_mnt_path(path)
+        filename, pathname = self.get_file_and_path_name(mnt_path)
+        print "Fsync:", filename
+        if filename.startswith(".goutputstream"):
+            path = os.path.join(self.local_file_path, filename)
+            print "Fsync:", path
         # Logging #
         self.log_func_name()
         logging.info("\npath = %s,type=%s" % (
-             str(mnt_path, type(mnt_path))))
+             str(mnt_path), type(mnt_path)))
         return self.flush(path, fh)
 
 def main(mntpoint, root):
